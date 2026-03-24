@@ -1,0 +1,71 @@
+site: myvault
+name: search
+description: Search Obsidian vault notes
+domain: file://
+strategy: public
+browser: false
+
+args:
+  query:
+    required: true
+    positional: true
+    help: Search query
+  limit:
+    type: int
+    default: 15
+    description: Max results
+
+pipeline:
+  - evaluate: |
+      (() => {
+        const vaultPath = require('fs').existsSync('/Users/cai/Data/Obsidian/CAIVault')
+          ? '/Users/cai/Data/Obsidian/CAIVault'
+          : null;
+        if (!vaultPath) return [];
+        const query = arguments[0].toLowerCase();
+        const limit = parseInt(arguments[1]) || 15;
+        const results = [];
+        function walk(dir) {
+          const entries = require('fs').readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const full = require('path').join(dir, entry.name);
+            if (entry.isDirectory() && !entry.name.startsWith('.')) {
+              walk(full);
+            } else if (entry.name.endsWith('.md')) {
+              const content = require('fs').readFileSync(full, 'utf-8');
+              const title = entry.name.replace(/^\d{4}-\d{2}-\d{2}(?:-\s*)?/, '').replace('.md', '');
+              const idx = content.toLowerCase().indexOf(query);
+              if (title.toLowerCase().includes(query) || idx !== -1) {
+                let context = '';
+                if (idx !== -1) {
+                  const s = Math.max(0, idx - 60);
+                  const e = Math.min(content.length, idx + query.length + 80);
+                  context = (s > 0 ? '...' : '') + content.slice(s, e) + (e < content.length ? '...' : '');
+                }
+                const tags = [...content.matchAll(/#[\w-]+/g)].slice(0, 4).map(m => m[0]).join(' ');
+                const mtime = require('fs').statSync(full).mtime;
+                results.push({
+                  title,
+                  path: full.replace(vaultPath + '/', ''),
+                  context: context || title,
+                  tags,
+                  updated: mtime.toISOString().slice(0, 10),
+                });
+              }
+            }
+          }
+        }
+        walk(vaultPath);
+        return results.slice(0, limit);
+      })(arguments[0], arguments[1])
+
+  - map:
+      rank: ${{ index + 1 }}
+      title: ${{ item.title }}
+      tags: ${{ item.tags || '-' }}
+      updated: ${{ item.updated }}
+      path: ${{ item.path }}
+
+  - limit: ${{ args.limit }}
+
+columns: [rank, title, tags, updated]

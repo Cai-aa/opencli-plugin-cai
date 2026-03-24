@@ -1,0 +1,6 @@
+{
+  "name": "@caibolt/opencli-plugin-cai",
+  "version": "1.0.0",
+  "description": "OpenCLI plugin for CAI: Obsidian vault + GitHub Trending",
+  "dependencies": {}
+}
